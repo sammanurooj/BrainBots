@@ -3,11 +3,10 @@ import NextAuth, { User, Session } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 
 import { getUser } from "@/db/queries";
-
 import { authConfig } from "./auth.config";
 
 interface ExtendedSession extends Session {
-  user: User;
+  user: User & { id: string };
 }
 
 export const {
@@ -20,11 +19,25 @@ export const {
   providers: [
     Credentials({
       credentials: {},
-      async authorize({ email, password }: any) {
-        let users = await getUser(email);
-        if (users.length === 0) return null;
-        let passwordsMatch = await compare(password, users[0].password!);
-        if (passwordsMatch) return users[0] as any;
+      async authorize({ email, password }: { email: string; password: string }) {
+        try {
+          const users = await getUser(email);
+          console.log(users, "users");
+
+          if (!users) {
+            throw new Error("No user found with the given email.");
+          }
+
+          const passwordsMatch = await compare(password, users.password!);
+          if (!passwordsMatch) {
+            throw new Error("Password does not match.");
+          }
+
+          return { ...users, id: users.id }; // Make sure `id` exists here
+        } catch (error) {
+          console.error("Authorization error:", error);
+          throw new Error("Unable to login.");
+        }
       },
     }),
   ],
@@ -43,8 +56,8 @@ export const {
       session: ExtendedSession;
       token: any;
     }) {
-      if (session.user) {
-        session.user.id = token.id as string;
+      if (token?.id) {
+        session.user.id = token.id as string; // Ensure the token has an id
       }
 
       return session;

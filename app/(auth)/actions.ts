@@ -1,10 +1,12 @@
 "use server";
 
 import { z } from "zod";
-
-import { createUser, getUser } from "@/db/queries";
-
+import { PrismaClient } from "@prisma/client";
 import { signIn } from "./auth";
+import { hash } from "bcrypt-ts";
+
+// Initialize Prisma Client
+const prisma = new PrismaClient();
 
 const authFormSchema = z.object({
   email: z.string().email(),
@@ -13,6 +15,25 @@ const authFormSchema = z.object({
 
 export interface LoginActionState {
   status: "idle" | "in_progress" | "success" | "failed" | "invalid_data";
+}
+
+// Prisma replacement for getUser function
+async function getUser(email: string) {
+  return await prisma.user.findUnique({
+    where: {
+      email,
+    },
+  });
+}
+
+// Prisma replacement for createUser function
+async function createUser(email: string, password: string) {
+  return await prisma.user.create({
+    data: {
+      email,
+      password, // Make sure password is hashed before storing in production
+    },
+  });
 }
 
 export const login = async (
@@ -43,12 +64,12 @@ export const login = async (
 
 export interface RegisterActionState {
   status:
-    | "idle"
-    | "in_progress"
-    | "success"
-    | "failed"
-    | "user_exists"
-    | "invalid_data";
+  | "idle"
+  | "in_progress"
+  | "success"
+  | "failed"
+  | "user_exists"
+  | "invalid_data";
 }
 
 export const register = async (
@@ -61,12 +82,15 @@ export const register = async (
       password: formData.get("password"),
     });
 
-    let [user] = await getUser(validatedData.email);
+    let user = await getUser(validatedData.email);
 
     if (user) {
       return { status: "user_exists" } as RegisterActionState;
     } else {
-      await createUser(validatedData.email, validatedData.password);
+      const hashedPassword = await hash(validatedData.password, 10);
+
+      await createUser(validatedData.email, hashedPassword);
+      console.log(validatedData)
       await signIn("credentials", {
         email: validatedData.email,
         password: validatedData.password,

@@ -1,24 +1,32 @@
-import { Message } from "ai";
-import { InferSelectModel } from "drizzle-orm";
-import { pgTable, varchar, timestamp, json, uuid } from "drizzle-orm/pg-core";
+// prisma/schema.prisma
 
-export const user = pgTable("User", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  email: varchar("email", { length: 64 }).notNull(),
-  password: varchar("password", { length: 64 }),
-});
+// Define the data source (PostgreSQL in this case)
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
 
-export type User = InferSelectModel<typeof user>;
+// Generator for Prisma Client
+generator client {
+  provider = "prisma-client-js"
+}
 
-export const chat = pgTable("Chat", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  createdAt: timestamp("createdAt").notNull(),
-  messages: json("messages").notNull(),
-  userId: uuid("userId")
-    .notNull()
-    .references(() => user.id),
-});
+model User {
+  id       String @id @default (uuid()) // Prisma uses 'String' for UUID types with a default UUID generator
+  email    String @unique @db.VarChar(64)
+  password String @db.VarChar(64)
+  name String? @db.VarChar(64)
 
-export type Chat = Omit<InferSelectModel<typeof chat>, "messages"> & {
-  messages: Array<Message>;
-};
+  // Relations
+  chats    Chat[]  // One-to-many relation: A user can have many chats
+}
+
+model Chat {
+  id        String @id @default (uuid())
+  createdAt DateTime @default (now())  // Prisma uses 'DateTime' for timestamps
+  messages  Json       // Prisma uses 'Json' for JSON data
+  userId    String     // Foreign key to 'User' model
+
+  // Relations
+  user      User @relation(fields: [userId], references: [id])  // Link to User model
+}
